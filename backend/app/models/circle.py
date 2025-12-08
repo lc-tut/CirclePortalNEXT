@@ -25,6 +25,7 @@ class CircleRole(str, Enum):
     """Circle role enum."""
 
     LEADER = "Leader"
+    EDITOR = "Editor"
     MEMBER = "Member"
 
 
