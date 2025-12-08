@@ -1,0 +1,82 @@
+[tools]
+python = "3.14"
+node = "24"
+uv = "latest"
+
+[tasks.setup]
+description = "Install all dependencies"
+run = """
+echo "Installing backend dependencies..."
+cd backend && uv sync
+echo "Installing frontend dependencies..."
+cd ../frontend && npm install
+echo "Setup completed!"
+"""
+
+[tasks.db]
+description = "Start database (Docker)"
+run = """
+echo "Starting Docker services..."
+docker compose up -d
+"""
+
+[tasks.backend]
+description = "Start backend server"
+run = """
+echo "Starting backend server..."
+cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+"""
+
+[tasks.frontend]
+description = "Start frontend server"
+run = """
+echo "Starting frontend server..."
+cd frontend && npm run dev
+"""
+
+[tasks.dev]
+description = "Start all development servers (DB + Backend + Frontend)"
+depends = ["db"]
+run = """
+mise run backend &
+mise run frontend &
+wait
+"""
+
+[tasks.test]
+description = "Run all tests"
+run = """
+echo "Running backend tests..."
+cd backend && uv run pytest
+echo "Running frontend tests..."
+cd ../frontend && npm run test
+"""
+
+[tasks.down]
+description = "Stop all services"
+run = """
+docker compose down
+pkill -f "uvicorn" || true
+pkill -f "next" || true
+"""
+
+[tasks.db-migrate]
+description = "Run database migrations"
+run = """
+cd backend && uv run python -c "import asyncio; from app.db.session import init_db; asyncio.run(init_db())"
+"""
+
+[tasks.db-reset]
+description = "Reset database (WARNING: All data will be lost)"
+run = """
+docker compose down -v
+docker compose up -d
+echo "Waiting for PostgreSQL to be ready..."
+sleep 5
+until docker exec circleportal-db pg_isready -U circleportal > /dev/null 2>&1; do
+  echo "PostgreSQL is unavailable - sleeping"
+  sleep 1
+done
+echo "PostgreSQL is ready!"
+cd backend && uv run python -c "import asyncio; from app.db.session import init_db; asyncio.run(init_db())"
+"""
