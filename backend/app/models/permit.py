@@ -1,6 +1,6 @@
 """Circle creation permit model."""
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import UUID, uuid7
 
 from sqlmodel import Field, SQLModel
 
@@ -10,7 +10,7 @@ class CircleCreationPermit(SQLModel, table=True):
 
     __tablename__ = "circle_creation_permits"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    id: UUID = Field(default_factory=uuid7, primary_key=True)
     email: str = Field(unique=True, index=True)
     admin_memo: str = Field(default="")
     is_used: bool = Field(default=False)

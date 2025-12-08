@@ -1,7 +1,7 @@
 """Circle model."""
 from datetime import datetime
 from enum import Enum
-from uuid import UUID, uuid4
+from uuid import UUID, uuid7
 
 from sqlmodel import Field, SQLModel
 
@@ -34,7 +34,7 @@ class Circle(SQLModel, table=True):
 
     __tablename__ = "circles"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    id: UUID = Field(default_factory=uuid7, primary_key=True)
     name: str = Field(index=True)
     campus: Campus
     category: CircleCategory
