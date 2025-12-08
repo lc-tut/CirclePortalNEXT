@@ -4,3 +4,14 @@
 
 # コードコメントについて
 コードコメントは日本語で記述してください。特に理由がない限り、英語でのコメントは避けてください。
+
+# miseについて
+基本的に mise を使用してpythonやnodeといったpackageの管理を行っています。
+また、task runnerとしても使用しています。
+テストやDBに関するものであれば、できるだけ mise 経由で実行を試してください
+- mise run test: frontend/backendのテストを実行
+- mise run test-front: frontendのテストを実行
+- mise run test-back: backendのテストを実行
+他のコマンドについては、`mise tasks` コマンドで確認してください。
+
+今後も使う可能性があると判断した物は、tasksとしてmiseに登録してください。
