@@ -7,7 +7,7 @@ uv = "latest"
 description = "Install all dependencies"
 run = """
 echo "Installing backend dependencies..."
-cd backend && uv sync
+cd backend && uv sync --all-extras --dev
 echo "Installing frontend dependencies..."
 cd ../frontend && npm install
 echo "Setup completed!"
@@ -43,13 +43,25 @@ mise run frontend &
 wait
 """
 
+[tasks.test-back]
+description = "Run backend tests"
+run = """
+echo "Running backend tests..."
+cd backend && uv sync --all-extras --dev && uv run pytest
+"""
+
+[tasks.test-front]
+description = "Run front tests"
+run = """
+echo "Running frontend tests..."
+cd ../frontend && npm run test
+"""
+
 [tasks.test]
 description = "Run all tests"
 run = """
-echo "Running backend tests..."
-cd backend && uv run pytest
-echo "Running frontend tests..."
-cd ../frontend && npm run test
+mise run test-back
+mise run test-front
 """
 
 [tasks.down]
