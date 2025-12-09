@@ -5,7 +5,7 @@ from functools import lru_cache
 
 import httpx
 from fastapi import HTTPException, status
-from jose import JWTError, jwt
+from jose import JWTError, jwt, jwk
 from jose.exceptions import JWTClaimsError
 
 from app.core.config import settings
@@ -30,7 +30,7 @@ class KeycloakJWKS:
         return cls._keys
 
     @classmethod
-    def get_public_key(cls, token: str) -> str:
+    async def get_public_key(cls, token: str) -> str:
         """JWT のヘッダから kid (Key ID) を取得し、対応する公開鍵を返す."""
         try:
             unverified_header = jwt.get_unverified_header(token)
@@ -47,11 +47,12 @@ class KeycloakJWKS:
                 detail="Token missing key ID",
             )
 
-        # 同期的に JWKS を取得 (既にキャッシュされているはず)
-        keys = asyncio.run(cls.get_keys())
-        for key in keys.get("keys", []):
-            if key.get("kid") == kid:
-                return jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key))
+        # 非同期で JWKS を取得 (キャッシュ済みなら即返却)
+        keys = await cls.get_keys()
+        for key_dict in keys.get("keys", []):
+            if key_dict.get("kid") == kid:
+                rsa_key = jwk.construct(key_dict)
+                return rsa_key.to_pem().decode("utf-8")
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -82,7 +83,7 @@ async def get_current_user(authorization: str) -> dict:
 
     try:
         # 公開鍵を使用して JWT を検証
-        public_key = KeycloakJWKS.get_public_key(token)
+        public_key = await KeycloakJWKS.get_public_key(token)
         payload = jwt.decode(
             token,
             public_key,
@@ -115,12 +116,20 @@ async def get_current_user(authorization: str) -> dict:
 def get_user_roles(payload: dict) -> list[str]:
     """JWT Payload からユーザーのロール (Role) を抽出.
 
-    Keycloak の resource_access 構造から circle-portal-backend クライアント
-    に関連するロールを取得する.
+    resource_access のクライアントロールに加え、realm_access のレルムロール
+    も統合して返す。
     """
+    roles: list[str] = []
+
     resource_access = payload.get("resource_access", {})
     client_roles = resource_access.get(settings.keycloak_client_id, {})
-    return client_roles.get("roles", [])
+    roles.extend(client_roles.get("roles", []))
+
+    realm_access = payload.get("realm_access", {})
+    roles.extend(realm_access.get("roles", []))
+
+    # 重複排除
+    return list(dict.fromkeys(roles))
 
 
 def is_system_admin(roles: list[str]) -> bool:

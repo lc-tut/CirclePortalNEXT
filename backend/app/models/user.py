@@ -21,8 +21,3 @@ class User(SQLModel, table=True):
         sa_column=Column(TIMESTAMP(timezone=True), nullable=True),
         description="失効日",
     )
-    deleted_at: datetime | None = Field(
-        default=None,
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=True),
-        description="削除日時 (論理削除)",
-    )

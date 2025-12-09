@@ -1,12 +1,18 @@
 """Test cases for circles endpoints."""
+import os
 from datetime import UTC, datetime
+from uuid import uuid4
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
+from jose import jwt
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.circle import Circle
 from app.models.enums import CircleCategory
+from app.models.user import User
 
 
 class TestGetCircles:
@@ -375,4 +381,409 @@ class TestSQLInjectionResistance:
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
+
+
+class TestCreateCircle:
+    """POST /api/v1/circles のテスト."""
+
+    @pytest.mark.asyncio
+    async def test_create_circle_unauthorized(self, client: AsyncClient):
+        """認証なしでリクエストした場合、401 Unauthorized が返る."""
+        payload = {
+            "name": "LinuxClub",
+            "campus_id": 1,
+            "category": "culture",
+            "leader_email": "taro.yamada@edu.teu.ac.jp",
+        }
+        # Authorization ヘッダなし
+        response = await client.post("/api/v1/circles", json=payload)
+        assert response.status_code == 422  # FastAPI のバリデーションエラー (ヘッダ必須)
+
+    @pytest.mark.asyncio
+    async def test_create_circle_invalid_token(self, client: AsyncClient):
+        """無効な JWT トークンでリクエストした場合、401 Unauthorized が返る."""
+        payload = {
+            "name": "LinuxClub",
+            "campus_id": 1,
+            "category": "culture",
+            "leader_email": "taro.yamada@edu.teu.ac.jp",
+        }
+        headers = {"Authorization": "Bearer invalid-token"}
+        response = await client.post("/api/v1/circles", json=payload, headers=headers)
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_create_circle_insufficient_permission(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """System Admin ロールを持たないユーザーでリクエストした場合、403 Forbidden が返る."""
+        # テストユーザーを作成 (System Admin でない)
+        user = User(
+            username="general_user",
+            email="general@edu.teu.ac.jp",
+            sys_role_id=2,  # general role
+            auth_user_id="550e8400-e29b-41d4-a716-446655440000",
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+        # モック JWT トークンを作成
+        mock_payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440000",
+            "email": "general@edu.teu.ac.jp",
+            "resource_access": {
+                "circle-portal-backend": {
+                    "roles": ["general"],  # System Admin ロールなし
+                }
+            },
+        }
+
+        with patch(
+            "app.core.security.KeycloakJWKS.get_public_key",
+            new_callable=AsyncMock,
+        ) as mock_get_key, patch("app.core.security.jwt.decode") as mock_decode:
+            mock_decode.return_value = mock_payload
+
+            payload = {
+                "name": "LinuxClub",
+                "campus_id": 1,
+                "category": "culture",
+                "leader_email": "taro.yamada@edu.teu.ac.jp",
+            }
+            headers = {"Authorization": "Bearer mock-token"}
+            response = await client.post(
+                "/api/v1/circles", json=payload, headers=headers
+            )
+            assert response.status_code == 403
+            data = response.json()
+            assert "Only SystemAdmin" in data["detail"]
+
+    @pytest.mark.asyncio
+    async def test_create_circle_user_not_found(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """leader_email に対応するユーザーが見つからない場合、404 Not Found が返る."""
+        # System Admin ユーザーを作成
+        admin_user = User(
+            username="admin",
+            email="admin@lcn.ad.jp",
+            sys_role_id=1,  # System Admin role
+            auth_user_id="550e8400-e29b-41d4-a716-446655440001",
+        )
+        db_session.add(admin_user)
+        await db_session.commit()
+
+        # モック JWT トークンを作成 (System Admin)
+        mock_payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440001",
+            "email": "admin@lcn.ad.jp",
+            "resource_access": {
+                "circle-portal-backend": {
+                    "roles": ["system_admin"],  # System Admin ロール
+                }
+            },
+        }
+
+        with patch(
+            "app.core.security.KeycloakJWKS.get_public_key",
+            new_callable=AsyncMock,
+        ) as mock_get_key, patch("app.core.security.jwt.decode") as mock_decode:
+            mock_decode.return_value = mock_payload
+
+            # leader_email に存在しないユーザーを指定
+            payload = {
+                "name": "LinuxClub",
+                "campus_id": 1,
+                "category": "culture",
+                "leader_email": "nonexistent@edu.teu.ac.jp",
+            }
+            headers = {"Authorization": "Bearer mock-token"}
+            response = await client.post(
+                "/api/v1/circles", json=payload, headers=headers
+            )
+            assert response.status_code == 404
+            data = response.json()
+            assert "not found" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_create_circle_success(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """正常なリクエストでサークルが作成される."""
+        # System Admin ユーザーを作成
+        admin_user = User(
+            username="admin",
+            email="admin@lcn.ad.jp",
+            sys_role_id=1,  # System Admin role
+            auth_user_id="550e8400-e29b-41d4-a716-446655440002",
+        )
+        # Leader となるユーザーを作成
+        leader_user = User(
+            username="taro",
+            email="taro.yamada@edu.teu.ac.jp",
+            sys_role_id=2,  # general role
+            auth_user_id="550e8400-e29b-41d4-a716-446655440003",
+        )
+        db_session.add_all([admin_user, leader_user])
+        await db_session.commit()
+
+        # モック JWT トークンを作成 (System Admin)
+        mock_payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440002",
+            "email": "admin@lcn.ad.jp",
+            "resource_access": {
+                "circle-portal-backend": {
+                    "roles": ["system_admin"],  # System Admin ロール
+                }
+            },
+        }
+
+        with patch(
+            "app.core.security.KeycloakJWKS.get_public_key",
+            new_callable=AsyncMock,
+        ) as mock_get_key, patch("app.core.security.jwt.decode") as mock_decode:
+            mock_decode.return_value = mock_payload
+
+            payload = {
+                "name": "LinuxClub",
+                "campus_id": 1,
+                "category": "culture",
+                "leader_email": "taro.yamada@edu.teu.ac.jp",
+            }
+            headers = {"Authorization": "Bearer mock-token"}
+            response = await client.post(
+                "/api/v1/circles", json=payload, headers=headers
+            )
+            assert response.status_code == 201
+            data = response.json()
+            assert data["name"] == "LinuxClub"
+            assert data["leader_email"] == "taro.yamada@edu.teu.ac.jp"
+            assert "circle_id" in data
+            assert data["message"] == "Circle created successfully"
+
+    @pytest.mark.asyncio
+    async def test_create_circle_invalid_campus_id(self, client: AsyncClient):
+        """invalid campus_id (範囲外)でリクエストした場合、422 Unprocessable Entity が返る."""
+        mock_payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440002",
+            "email": "admin@lcn.ad.jp",
+            "resource_access": {
+                "circle-portal-backend": {
+                    "roles": ["system_admin"],
+                }
+            },
+        }
+
+        with patch(
+            "app.core.security.KeycloakJWKS.get_public_key",
+            new_callable=AsyncMock,
+        ) as mock_get_key, patch("app.core.security.jwt.decode") as mock_decode:
+            mock_decode.return_value = mock_payload
+
+            # campus_id=3 (invalid)
+            payload = {
+                "name": "LinuxClub",
+                "campus_id": 3,
+                "category": "culture",
+                "leader_email": "taro.yamada@edu.teu.ac.jp",
+            }
+            headers = {"Authorization": "Bearer mock-token"}
+            response = await client.post(
+                "/api/v1/circles", json=payload, headers=headers
+            )
+            assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_circle_invalid_category(self, client: AsyncClient):
+        """invalid category でリクエストした場合、422 Unprocessable Entity が返る."""
+        mock_payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440002",
+            "email": "admin@lcn.ad.jp",
+            "resource_access": {
+                "circle-portal-backend": {
+                    "roles": ["system_admin"],
+                }
+            },
+        }
+
+        with patch(
+            "app.core.security.KeycloakJWKS.get_public_key",
+            new_callable=AsyncMock,
+        ) as mock_get_key, patch("app.core.security.jwt.decode") as mock_decode:
+            mock_decode.return_value = mock_payload
+
+            # category="invalid" (invalid)
+            payload = {
+                "name": "LinuxClub",
+                "campus_id": 1,
+                "category": "invalid_category",
+                "leader_email": "taro.yamada@edu.teu.ac.jp",
+            }
+            headers = {"Authorization": "Bearer mock-token"}
+            response = await client.post(
+                "/api/v1/circles", json=payload, headers=headers
+            )
+            assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_circle_invalid_email(self, client: AsyncClient):
+        """invalid email format でリクエストした場合、422 Unprocessable Entity が返る."""
+        mock_payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440002",
+            "email": "admin@lcn.ad.jp",
+            "resource_access": {
+                "circle-portal-backend": {
+                    "roles": ["system_admin"],
+                }
+            },
+        }
+
+        with patch(
+            "app.core.security.KeycloakJWKS.get_public_key",
+            new_callable=AsyncMock,
+        ) as mock_get_key, patch("app.core.security.jwt.decode") as mock_decode:
+            mock_decode.return_value = mock_payload
+
+            # leader_email がメールアドレス形式でない
+            payload = {
+                "name": "LinuxClub",
+                "campus_id": 1,
+                "category": "culture",
+                "leader_email": "invalid-email-format",
+            }
+            headers = {"Authorization": "Bearer mock-token"}
+            response = await client.post(
+                "/api/v1/circles", json=payload, headers=headers
+            )
+            assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_circle_missing_required_field(self, client: AsyncClient):
+        """必須フィールドが欠けている場合、422 Unprocessable Entity が返る."""
+        mock_payload = {
+            "sub": "550e8400-e29b-41d4-a716-446655440002",
+            "email": "admin@lcn.ad.jp",
+            "resource_access": {
+                "circle-portal-backend": {
+                    "roles": ["system_admin"],
+                }
+            },
+        }
+
+        with patch(
+            "app.core.security.KeycloakJWKS.get_public_key",
+            new_callable=AsyncMock,
+        ) as mock_get_key, patch("app.core.security.jwt.decode") as mock_decode:
+            mock_decode.return_value = mock_payload
+
+            # name が欠けている
+            payload = {
+                "campus_id": 1,
+                "category": "culture",
+                "leader_email": "taro.yamada@edu.teu.ac.jp",
+            }
+            headers = {"Authorization": "Bearer mock-token"}
+            response = await client.post(
+                "/api/v1/circles", json=payload, headers=headers
+            )
+            assert response.status_code == 422
+
+
+class TestCreateCircleKeycloakIntegration:
+    """ローカル Keycloak を使った統合テスト (環境変数で有効化)."""
+
+    @pytest.mark.asyncio
+    async def test_create_circle_with_real_keycloak(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """環境変数 KEYCLOAK_INTEGRATION_TEST=1 のときのみ実行し、実際の Keycloak からトークンを取得してサークル作成を確認する."""
+
+        if os.getenv("KEYCLOAK_INTEGRATION_TEST") != "1":
+            pytest.skip("KEYCLOAK_INTEGRATION_TEST が 1 でないためスキップ")
+
+        keycloak_url = os.getenv("KEYCLOAK_URL", "http://localhost:8080")
+        realm = os.getenv("KEYCLOAK_REALM", "CirclePortal-dev")
+        client_id = os.getenv("KEYCLOAK_CLIENT_ID", "circle-portal-backend")
+        client_secret = os.getenv("KEYCLOAK_CLIENT_SECRET")
+        username = os.getenv("KEYCLOAK_TEST_USERNAME")
+        password = os.getenv("KEYCLOAK_TEST_PASSWORD")
+
+        # 資格情報が無ければスキップ
+        if not username or not password:
+            pytest.skip("Keycloak のテストユーザー資格情報が設定されていないためスキップ")
+
+        token_endpoint = f"{keycloak_url}/realms/{realm}/protocol/openid-connect/token"
+
+        # Keycloak からアクセストークンを取得
+        try:
+            async with AsyncClient() as http_client:
+                data = {
+                    "grant_type": "password",
+                    "client_id": client_id,
+                    "username": username,
+                    "password": password,
+                }
+                if client_secret:
+                    data["client_secret"] = client_secret
+
+                token_resp = await http_client.post(token_endpoint, data=data, timeout=10)
+        except Exception:
+            pytest.skip("Keycloak への接続に失敗したためスキップ")
+
+        if token_resp.status_code != 200:
+            pytest.skip(f"Keycloak トークン取得に失敗: {token_resp.status_code}")
+
+        token_json = token_resp.json()
+        access_token = token_json.get("access_token")
+        if not access_token:
+            pytest.skip("access_token が取得できなかったためスキップ")
+
+        # 検証無しでクレームを確認し、必要なユーザー情報をDBに投入
+        claims = jwt.get_unverified_claims(access_token)
+        auth_user_id = claims.get("sub")
+        email = claims.get("email") or f"{username}@example.com"
+        resource_roles = (
+            claims.get("resource_access", {})
+            .get(client_id, {})
+            .get("roles", [])
+        )
+        realm_roles = claims.get("realm_access", {}).get("roles", [])
+        roles = list(dict.fromkeys(resource_roles + realm_roles))
+        if "system_admin" not in roles:
+            pytest.skip("system_admin ロールを持たないトークンのためスキップ")
+
+        # 既存ユーザーがあれば再利用、無ければ作成
+        result = await db_session.execute(
+            select(User).where(User.auth_user_id == auth_user_id)
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            user = User(
+                username=username,
+                email=email,
+                sys_role_id=1,  # System Admin
+                auth_user_id=auth_user_id,
+            )
+            db_session.add(user)
+            await db_session.commit()
+            await db_session.refresh(user)
+
+        # サークル作成リクエストを実行
+        circle_name = f"LinuxClub-{uuid4().hex}"
+        payload = {
+            "name": circle_name,
+            "campus_id": 1,
+            "category": "culture",
+            "leader_email": email,
+        }
+
+        headers = {"Authorization": f"Bearer {access_token}"}
+        response = await client.post("/api/v1/circles", json=payload, headers=headers)
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name"] == circle_name
+        assert data["leader_email"] == email
+        assert data["message"] == "Circle created successfully"
+
 

@@ -90,7 +90,7 @@ async def create_circle(
         ValueError: leader_email に対応するユーザーが見つからない場合
     """
     # leader_email からユーザーを検索
-    user_query = select(User).where(User.email == leader_email, User.deleted_at.is_(None))
+    user_query = select(User).where(User.email == leader_email)
     result = await session.execute(user_query)
     leader_user = result.scalar_one_or_none()
 

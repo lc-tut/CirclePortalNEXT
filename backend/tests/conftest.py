@@ -1,4 +1,8 @@
 """Test configuration."""
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -10,8 +14,10 @@ from app.db.init_data import init_master_data
 from app.db.session import get_session
 from app.main import app
 
-# テスト用データベースURL (環境変数で上書き可能)
-import os
+# .env ファイルを読み込む（プロジェクトルートから探す）
+env_file = Path(__file__).parent.parent / ".env"
+if env_file.exists():
+    load_dotenv(env_file)
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",

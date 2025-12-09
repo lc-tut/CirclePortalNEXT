@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     keycloak_realm: str = "CirclePortal-dev"
     keycloak_client_id: str = "circle-portal-backend"
     keycloak_client_secret: str = "dev-client-secret"
+    keycloak_integration_test: bool = False
+    
+    # Keycloak Test User (for integration tests)
+    # None の場合、統合テストはスキップされます
+    keycloak_test_username: str | None = None
+    keycloak_test_password: str | None = None
 
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
