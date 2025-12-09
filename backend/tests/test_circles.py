@@ -214,3 +214,164 @@ class TestGetCircles:
         # offset=-1 (不正)
         response = await client.get("/api/v1/circles?offset=-1")
         assert response.status_code == 422
+
+
+class TestSQLInjectionResistance:
+    """SQLインジェクション攻撃への耐性テスト."""
+
+    @pytest.mark.asyncio
+    async def test_search_with_sql_injection_attempt_union(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """UNION ベースのSQLインジェクション試行に耐性があることを確認."""
+        # テストデータ作成
+        circle = Circle(
+            name="正常なサークル",
+            campus_id=1,
+            category=CircleCategory.CULTURE,
+            is_published=True,
+        )
+        db_session.add(circle)
+        await db_session.commit()
+
+        # UNION ベースのインジェクション試行
+        injection_query = "test' UNION SELECT * FROM users WHERE '1'='1"
+        response = await client.get(f"/api/v1/circles?q={injection_query}")
+        assert response.status_code == 200
+        # インジェクションが失敗し、マッチするサークルがないはず
+        data = response.json()
+        assert len(data) == 0
+
+    @pytest.mark.asyncio
+    async def test_search_with_sql_injection_attempt_or(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """OR ベースのSQLインジェクション試行に耐性があることを確認."""
+        # テストデータ作成
+        circle1 = Circle(
+            name="公開サークル1",
+            campus_id=1,
+            category=CircleCategory.CULTURE,
+            description="これは公開サークルです",
+            is_published=True,
+        )
+        circle2 = Circle(
+            name="非公開サークル",
+            campus_id=1,
+            category=CircleCategory.SPORTS,
+            description="非公開",
+            is_published=False,
+        )
+        db_session.add_all([circle1, circle2])
+        await db_session.commit()
+
+        # OR ベースのインジェクション試行（非公開サークルも取得しようとする）
+        injection_query = "公開' OR is_published = false OR '1'='1"
+        response = await client.get(f"/api/v1/circles?q={injection_query}")
+        assert response.status_code == 200
+        data = response.json()
+        # 公開済みのサークルのみが返されるはず（非公開サークルは含まれない）
+        assert len(data) <= 1
+        for circle in data:
+            assert circle["is_published"] is True
+
+    @pytest.mark.asyncio
+    async def test_search_with_sql_injection_attempt_comment(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """コメント付きのSQLインジェクション試行に耐性があることを確認."""
+        # テストデータ作成
+        circle = Circle(
+            name="テストサークル",
+            campus_id=1,
+            category=CircleCategory.CULTURE,
+            is_published=True,
+        )
+        db_session.add(circle)
+        await db_session.commit()
+
+        # コメント付きのインジェクション試行
+        injection_query = "test' OR '1'='1' -- "
+        response = await client.get(f"/api/v1/circles?q={injection_query}")
+        assert response.status_code == 200
+        data = response.json()
+        # インジェクションが無効化され、正常なテキスト検索として動作
+        # "test' OR '1'='1' -- " というテキストにマッチするサークルはないはず
+        assert len(data) == 0
+
+    @pytest.mark.asyncio
+    async def test_search_with_special_characters(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """特殊文字を含む検索が安全に処理されることを確認."""
+        # テストデータ作成
+        circle1 = Circle(
+            name="Python & C++ Club",
+            campus_id=1,
+            category=CircleCategory.CULTURE,
+            description="プログラミング",
+            is_published=True,
+        )
+        circle2 = Circle(
+            name="Audio/Video Production",
+            campus_id=1,
+            category=CircleCategory.CULTURE,
+            description="映像編集",
+            is_published=True,
+        )
+        db_session.add_all([circle1, circle2])
+        await db_session.commit()
+
+        # 特殊文字を含む検索
+        response = await client.get("/api/v1/circles?q=Python%20&%20C%2B%2B")
+        assert response.status_code == 200
+        data = response.json()
+        # 正しく検索されること
+        assert len(data) == 1
+        assert "Python & C++" in data[0]["name"]
+
+    @pytest.mark.asyncio
+    async def test_search_with_percent_wildcard(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """% ワイルドカード文字を含む検索が適切に処理されることを確認."""
+        # テストデータ作成
+        circle = Circle(
+            name="100% Happiness Club",
+            campus_id=1,
+            category=CircleCategory.CULTURE,
+            description="楽しいサークル",
+            is_published=True,
+        )
+        db_session.add(circle)
+        await db_session.commit()
+
+        # % を含む検索
+        response = await client.get("/api/v1/circles?q=100%25")
+        assert response.status_code == 200
+        data = response.json()
+        # % がエスケープされて正しく検索されること
+        assert len(data) == 1
+        assert "100%" in data[0]["name"]
+
+    @pytest.mark.asyncio
+    async def test_search_with_backslash(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """バックスラッシュを含む検索が安全に処理されることを確認."""
+        # テストデータ作成
+        circle = Circle(
+            name="Path\\Search Club",
+            campus_id=1,
+            category=CircleCategory.CULTURE,
+            is_published=True,
+        )
+        db_session.add(circle)
+        await db_session.commit()
+
+        # バックスラッシュを含む検索
+        response = await client.get("/api/v1/circles?q=Path")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+
