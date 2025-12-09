@@ -1,33 +1,9 @@
 """Circle model."""
 from datetime import UTC, datetime
-from enum import Enum
 from uuid import UUID, uuid7
 
 from sqlalchemy import Column, TIMESTAMP
 from sqlmodel import Field, SQLModel
-
-
-class Campus(str, Enum):
-    """Campus enum."""
-
-    HACHIOJI = "八王子"
-    KAMATA = "蒲田"
-
-
-class CircleCategory(str, Enum):
-    """Circle category enum."""
-
-    SPORTS = "運動系"
-    CULTURE = "文化系"
-    COMMITTEE = "委員会"
-
-
-class CircleRole(str, Enum):
-    """Circle role enum."""
-
-    LEADER = "Leader"
-    EDITOR = "Editor"
-    MEMBER = "Member"
 
 
 class Circle(SQLModel, table=True):
@@ -37,8 +13,8 @@ class Circle(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid7, primary_key=True)
     name: str = Field(index=True)
-    campus: Campus
-    category: CircleCategory
+    campus_id: int = Field(foreign_key="campuses.id", index=True)
+    category_id: int = Field(foreign_key="circle_categories.id", index=True)
     description: str = Field(default="")
     location: str | None = Field(default=None)
     activity_detail: str | None = Field(default=None)
@@ -65,4 +41,4 @@ class CircleMember(SQLModel, table=True):
 
     circle_id: UUID = Field(foreign_key="circles.id", primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", primary_key=True)
-    role: CircleRole = Field(default=CircleRole.MEMBER)
+    role_id: int = Field(foreign_key="circle_roles.id", index=True)
