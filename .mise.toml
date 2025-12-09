@@ -13,8 +13,8 @@ cd ../frontend && npm install
 echo "Setup completed!"
 """
 
-[tasks.db]
-description = "Start database (Docker)"
+[tasks.infra]
+description = "Start infrastructure services (PostgreSQL, Keycloak)"
 run = """
 echo "Starting Docker services..."
 docker compose up -d
@@ -35,8 +35,8 @@ cd frontend && npm run dev
 """
 
 [tasks.dev]
-description = "Start all development servers (DB + Backend + Frontend)"
-depends = ["db"]
+description = "Start all development servers (Infrastructure + Backend + Frontend)"
+depends = ["infra"]
 run = """
 mise run backend &
 mise run frontend &

@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
+    # Keycloak (OAuth2/OIDC)
+    keycloak_url: str = "http://localhost:8080"
+    keycloak_realm: str = "CirclePortal-dev"
+    keycloak_client_id: str = "circle-portal-backend"
+    keycloak_client_secret: str = "dev-client-secret"
+
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
