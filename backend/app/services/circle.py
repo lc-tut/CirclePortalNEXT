@@ -29,7 +29,7 @@ async def get_circles(
         サークルのリスト (公開済み・削除されていないもののみ)
     """
     # 基本クエリ: 公開済み & 削除されていない
-    query = select(Circle).where(Circle.is_published == True, Circle.deleted_at == None)  # noqa: E712
+    query = select(Circle).where(Circle.is_published.is_(True), Circle.deleted_at.is_(None))
 
     # フィルタ適用
     if campus_id is not None:
