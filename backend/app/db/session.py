@@ -1,11 +1,15 @@
 """Database session management."""
+import logging
 from collections.abc import AsyncGenerator
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Create async engine
 engine = create_async_engine(
@@ -33,9 +37,9 @@ async def init_db() -> None:
     async with async_session() as session:
         try:
             await init_master_data(session)
-        except Exception:
+        except IntegrityError:
             # マスタデータが既に存在する場合はスキップ
-            pass
+            logger.debug("Master data already exists in database, skipping initialization")
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

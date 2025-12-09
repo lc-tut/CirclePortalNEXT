@@ -48,7 +48,7 @@ class TestGetCircles:
             category=CircleCategory.COMMITTEE,  # 委員会
             description="削除済みのサークル",
             is_published=True,
-            deleted_at=datetime.now(UTC),
+            deleted_at=datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC),
         )
 
         db_session.add_all([published_circle, unpublished_circle, deleted_circle])
@@ -154,7 +154,7 @@ class TestGetCircles:
         self, client: AsyncClient, db_session: AsyncSession
     ):
         """ページネーション(limit/offset)が機能する."""
-        # 3つのサークルを作成
+        # 3つのサークルを作成 (作成順序を指定)
         circles_data = [
             Circle(
                 name="サークルA",
@@ -178,20 +178,21 @@ class TestGetCircles:
         db_session.add_all(circles_data)
         await db_session.commit()
 
-        # 最初の2件取得 (limit=2, offset=0)
+        # ORDER BY created_at DESC なので、最新作成順 (C, B, A) の順
+        # 最初の2件取得 (limit=2, offset=0) - C, B
         response = await client.get("/api/v1/circles?limit=2&offset=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 2
-        assert data[0]["name"] == "サークルA"
+        assert data[0]["name"] == "サークルC"
         assert data[1]["name"] == "サークルB"
 
-        # 次の1件取得 (limit=2, offset=2)
+        # 次の1件取得 (limit=2, offset=2) - A
         response = await client.get("/api/v1/circles?limit=2&offset=2")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
-        assert data[0]["name"] == "サークルC"
+        assert data[0]["name"] == "サークルA"
 
     @pytest.mark.asyncio
     async def test_get_circles_pagination_limit_validation(

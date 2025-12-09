@@ -29,7 +29,11 @@ class Circle(SQLModel, table=True):
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            nullable=False,
+            onupdate=lambda: datetime.now(UTC),
+        ),
     )
     deleted_at: datetime | None = Field(
         default=None, sa_column=Column(TIMESTAMP(timezone=True), nullable=True)

@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("", response_model=list[Circle])
 async def list_circles(
-    campus_id: int | None = Query(None, description="キャンパスIDでフィルタ (1=八王子, 2=蒲田)"),
+    campus_id: int | None = Query(None, ge=1, le=2, description="キャンパスIDでフィルタ (1=八王子, 2=蒲田)"),
     category: CircleCategory | None = Query(None, description="カテゴリでフィルタ (sports/culture/committee)"),
     q: str | None = Query(None, description="検索キーワード (名前・説明文)"),
     limit: int = Query(20, ge=1, le=100, description="取得件数上限 (1-100、デフォルト: 20)"),

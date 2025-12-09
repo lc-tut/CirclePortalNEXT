@@ -10,8 +10,13 @@ from app.db.init_data import init_master_data
 from app.db.session import get_session
 from app.main import app
 
-# テスト用データベースURL
-TEST_DATABASE_URL = "postgresql+asyncpg://circleportal:circleportal@localhost:5432/circleportal_test"
+# テスト用データベースURL (環境変数で上書き可能)
+import os
+
+TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://circleportal:circleportal@localhost:5432/circleportal_test"
+)
 
 
 @pytest.fixture(scope="function")

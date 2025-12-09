@@ -37,10 +37,16 @@ async def get_circles(
     if category is not None:
         query = query.where(Circle.category == category)
     if search_query:
-        search_pattern = f"%{search_query}%"
+        # SQL LIKE のワイルドカード文字 (%, _) をエスケープ
+        search_escaped = search_query.replace("%", r"\%").replace("_", r"\_")
+        search_pattern = f"%{search_escaped}%"
         query = query.where(
-            (Circle.name.ilike(search_pattern)) | (Circle.description.ilike(search_pattern))
+            (Circle.name.ilike(search_pattern, escape="\\")) | 
+            (Circle.description.ilike(search_pattern, escape="\\"))
         )
+
+    # ソート適用 (作成日時の新しい順)
+    query = query.order_by(Circle.created_at.desc())
 
     # ページネーション適用
     query = query.limit(limit).offset(offset)
