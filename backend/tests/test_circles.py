@@ -148,3 +148,69 @@ class TestGetCircles:
         data = response.json()
         assert len(data) == 1
         assert data[0]["name"] == "LinuxClub"
+
+    @pytest.mark.asyncio
+    async def test_get_circles_pagination(
+        self, client: AsyncClient, db_session: AsyncSession
+    ):
+        """ページネーション(limit/offset)が機能する."""
+        # 3つのサークルを作成
+        circles_data = [
+            Circle(
+                name="サークルA",
+                campus_id=1,
+                category=CircleCategory.CULTURE,
+                is_published=True,
+            ),
+            Circle(
+                name="サークルB",
+                campus_id=1,
+                category=CircleCategory.CULTURE,
+                is_published=True,
+            ),
+            Circle(
+                name="サークルC",
+                campus_id=1,
+                category=CircleCategory.CULTURE,
+                is_published=True,
+            ),
+        ]
+        db_session.add_all(circles_data)
+        await db_session.commit()
+
+        # 最初の2件取得 (limit=2, offset=0)
+        response = await client.get("/api/v1/circles?limit=2&offset=0")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert data[0]["name"] == "サークルA"
+        assert data[1]["name"] == "サークルB"
+
+        # 次の1件取得 (limit=2, offset=2)
+        response = await client.get("/api/v1/circles?limit=2&offset=2")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["name"] == "サークルC"
+
+    @pytest.mark.asyncio
+    async def test_get_circles_pagination_limit_validation(
+        self, client: AsyncClient
+    ):
+        """limit の値が1-100の範囲外の場合、エラーが返る."""
+        # limit=0 (不正)
+        response = await client.get("/api/v1/circles?limit=0")
+        assert response.status_code == 422
+
+        # limit=101 (不正)
+        response = await client.get("/api/v1/circles?limit=101")
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_get_circles_pagination_offset_validation(
+        self, client: AsyncClient
+    ):
+        """offset の値が負の場合、エラーが返る."""
+        # offset=-1 (不正)
+        response = await client.get("/api/v1/circles?offset=-1")
+        assert response.status_code == 422

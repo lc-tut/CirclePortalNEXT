@@ -11,6 +11,8 @@ async def get_circles(
     campus_id: int | None = None,
     category: CircleCategory | None = None,
     search_query: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
 ) -> list[Circle]:
     """
     サークル一覧を取得する.
@@ -20,6 +22,8 @@ async def get_circles(
         campus_id: キャンパスIDフィルタ (optional)
         category: カテゴリフィルタ (optional)
         search_query: 検索クエリ (optional、名前または説明文に含まれる)
+        limit: 取得件数上限 (デフォルト: 20)
+        offset: オフセット (デフォルト: 0)
 
     Returns:
         サークルのリスト (公開済み・削除されていないもののみ)
@@ -37,6 +41,9 @@ async def get_circles(
         query = query.where(
             (Circle.name.ilike(search_pattern)) | (Circle.description.ilike(search_pattern))
         )
+
+    # ページネーション適用
+    query = query.limit(limit).offset(offset)
 
     # 実行
     result = await session.execute(query)
