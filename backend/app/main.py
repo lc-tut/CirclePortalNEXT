@@ -41,14 +41,17 @@ app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 app.include_router(api_router, prefix="/api/v1")
 
 
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {
-        "name": settings.app_name,
-        "version": settings.app_version,
-        "status": "running",
-    }
+# Development only endpoints
+if settings.debug:
+    @app.get("/")
+    async def root():
+        """Root endpoint (development only)."""
+        return {
+            "name": settings.app_name,
+            "version": settings.app_version,
+            "status": "running",
+            "environment": "development",
+        }
 
 
 @app.get("/health")
