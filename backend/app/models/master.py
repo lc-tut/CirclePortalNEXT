@@ -8,7 +8,6 @@ class Campus(SQLModel, table=True):
     __tablename__ = "campuses"
 
     id: int = Field(primary_key=True)
-    name: str = Field(unique=True, index=True)  # 八王子, 蒲田
     code: str = Field(unique=True, index=True)  # hachioji, kamata
 
 
@@ -18,7 +17,6 @@ class SystemRole(SQLModel, table=True):
     __tablename__ = "system_roles"
 
     id: int = Field(primary_key=True)
-    name: str = Field(unique=True, index=True)  # SystemAdmin, General
     code: str = Field(unique=True, index=True)  # system_admin, general
 
 

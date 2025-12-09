@@ -16,7 +16,8 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True, index=True)
     sys_role_id: int = Field(foreign_key="system_roles.id", index=True)
     auth_user_id: str | None = Field(default=None, unique=True, index=True)
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+    expire_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=True),
+        description="失効日",
     )

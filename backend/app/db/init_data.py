@@ -21,14 +21,14 @@ async def init_master_data(session: AsyncSession) -> None:
     """
     # キャンパスマスタ
     campuses = [
-        Campus(id=1, name="八王子", code="hachioji"),
-        Campus(id=2, name="蒲田", code="kamata"),
+        Campus(id=1, code="hachioji"),
+        Campus(id=2, code="kamata"),
     ]
 
     # システムロールマスタ
     system_roles = [
-        SystemRole(id=1, name="SystemAdmin", code="system_admin"),
-        SystemRole(id=2, name="General", code="general"),
+        SystemRole(id=1, code="system_admin"),
+        SystemRole(id=2, code="general"),
     ]
 
     # サークルロールマスタ

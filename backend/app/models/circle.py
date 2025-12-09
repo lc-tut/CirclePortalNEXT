@@ -53,13 +53,3 @@ class CircleMember(SQLModel, table=True):
     circle_id: UUID = Field(foreign_key="circles.id", primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", primary_key=True)
     role_id: int = Field(foreign_key="circle_roles.id", index=True)
-    joined_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
-        description="メンバー参加日時",
-    )
-    left_at: datetime | None = Field(
-        default=None,
-        sa_column=Column(TIMESTAMP(timezone=True), nullable=True),
-        description="脱退日時 (NULL=現在所属中)",
-    )
