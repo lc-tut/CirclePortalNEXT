@@ -6,6 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.circle import Circle
+from app.models.enums import CircleCategory
 
 
 class TestGetCircles:
@@ -24,27 +25,27 @@ class TestGetCircles:
         self, client: AsyncClient, db_session: AsyncSession
     ):
         """公開されているサークルのみが返される(非公開・削除済みは除外)."""
-        # テストデータ作成 (マスタテーブルのIDを使用)
+        # テストデータ作成
         # campus_id: 1=八王子, 2=蒲田
-        # category_id: 1=運動系, 2=文化系, 3=委員会
+        # category: sports=運動系, culture=文化系, committee=委員会
         published_circle = Circle(
             name="公開サークル",
             campus_id=1,  # 八王子
-            category_id=2,  # 文化系
+            category=CircleCategory.CULTURE,  # 文化系
             description="公開されているサークル",
             is_published=True,
         )
         unpublished_circle = Circle(
             name="非公開サークル",
             campus_id=2,  # 蒲田
-            category_id=1,  # 運動系
+            category=CircleCategory.SPORTS,  # 運動系
             description="非公開のサークル",
             is_published=False,
         )
         deleted_circle = Circle(
             name="削除済みサークル",
             campus_id=1,  # 八王子
-            category_id=3,  # 委員会
+            category=CircleCategory.COMMITTEE,  # 委員会
             description="削除済みのサークル",
             is_published=True,
             deleted_at=datetime.now(UTC),
@@ -70,13 +71,13 @@ class TestGetCircles:
         hachioji_circle = Circle(
             name="八王子サークル",
             campus_id=1,  # 八王子
-            category_id=2,  # 文化系
+            category=CircleCategory.CULTURE,  # 文化系
             is_published=True,
         )
         kamata_circle = Circle(
             name="蒲田サークル",
             campus_id=2,  # 蒲田
-            category_id=1,  # 運動系
+            category=CircleCategory.SPORTS,  # 運動系
             is_published=True,
         )
 
@@ -98,21 +99,21 @@ class TestGetCircles:
         sports_circle = Circle(
             name="運動系サークル",
             campus_id=1,  # 八王子
-            category_id=1,  # 運動系
+            category=CircleCategory.SPORTS,  # 運動系
             is_published=True,
         )
         culture_circle = Circle(
             name="文化系サークル",
             campus_id=1,  # 八王子
-            category_id=2,  # 文化系
+            category=CircleCategory.CULTURE,  # 文化系
             is_published=True,
         )
 
         db_session.add_all([sports_circle, culture_circle])
         await db_session.commit()
 
-        # 運動系のみ取得 (category_id=1)
-        response = await client.get("/api/v1/circles?category_id=1")
+        # 運動系のみ取得 (category=sports)
+        response = await client.get("/api/v1/circles?category=sports")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -126,14 +127,14 @@ class TestGetCircles:
         linux_club = Circle(
             name="LinuxClub",
             campus_id=1,  # 八王子
-            category_id=2,  # 文化系
+            category=CircleCategory.CULTURE,  # 文化系
             description="Linuxを愛するサークルです",
             is_published=True,
         )
         soccer_club = Circle(
             name="サッカー部",
             campus_id=1,  # 八王子
-            category_id=1,  # 運動系
+            category=CircleCategory.SPORTS,  # 運動系
             description="サッカーを楽しむ部活です",
             is_published=True,
         )

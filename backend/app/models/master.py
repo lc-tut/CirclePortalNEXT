@@ -12,16 +12,6 @@ class Campus(SQLModel, table=True):
     code: str = Field(unique=True, index=True)  # hachioji, kamata
 
 
-class CircleCategory(SQLModel, table=True):
-    """Circle category master table."""
-
-    __tablename__ = "circle_categories"
-
-    id: int = Field(primary_key=True)
-    name: str = Field(unique=True, index=True)  # 運動系, 文化系, 委員会
-    code: str = Field(unique=True, index=True)  # sports, culture, committee
-
-
 class SystemRole(SQLModel, table=True):
     """System role master table."""
 

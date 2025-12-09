@@ -5,6 +5,8 @@ from uuid import UUID, uuid7
 from sqlalchemy import Column, TIMESTAMP
 from sqlmodel import Field, SQLModel
 
+from app.models.enums import CircleCategory
+
 
 class Circle(SQLModel, table=True):
     """Circle model."""
@@ -14,7 +16,7 @@ class Circle(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid7, primary_key=True)
     name: str = Field(index=True)
     campus_id: int = Field(foreign_key="campuses.id", index=True)
-    category_id: int = Field(foreign_key="circle_categories.id", index=True)
+    category: CircleCategory = Field(index=True)
     description: str = Field(default="")
     location: str | None = Field(default=None)
     activity_detail: str | None = Field(default=None)
@@ -35,10 +37,25 @@ class Circle(SQLModel, table=True):
 
 
 class CircleMember(SQLModel, table=True):
-    """Circle member relationship table."""
+    """
+    Circle member relationship table.
+
+    ユーザーとサークルの多対多リレーション。
+    メンバーの参加・脱退履歴を管理する。
+    """
 
     __tablename__ = "circle_members"
 
     circle_id: UUID = Field(foreign_key="circles.id", primary_key=True)
     user_id: UUID = Field(foreign_key="users.id", primary_key=True)
     role_id: int = Field(foreign_key="circle_roles.id", index=True)
+    joined_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+        description="メンバー参加日時",
+    )
+    left_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=True),
+        description="脱退日時 (NULL=現在所属中)",
+    )
